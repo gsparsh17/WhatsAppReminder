@@ -2,6 +2,8 @@ const express = require('express');
 const { Client } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000; // Render will use port from environment variables
@@ -9,8 +11,19 @@ const port = process.env.PORT || 3000; // Render will use port from environment 
 app.use(cors());
 app.use(express.json());
 
-// Initialize WhatsApp client
-const client = new Client();
+const sessionFilePath = path.join(__dirname, 'whatsapp-session.json');
+
+// Initialize WhatsApp client with session data if available
+let client;
+
+if (fs.existsSync(sessionFilePath)) {
+  // Load session data from file
+  const sessionData = require(sessionFilePath);
+  client = new Client({ session: sessionData });
+} else {
+  // Initialize client without session data
+  client = new Client();
+}
 
 client.on('qr', (qr) => {
   qrcode.generate(qr, { small: true });
@@ -21,16 +34,19 @@ client.on('ready', () => {
   console.log('WhatsApp client is ready!');
 });
 
-client.initialize();
-
 client.on('authenticated', (session) => {
   console.log('Client is authenticated');
+  // Save session data to a file
+  fs.writeFileSync(sessionFilePath, JSON.stringify(session));
 });
 
 client.on('disconnected', () => {
   console.log('Client has been disconnected');
 });
 
+client.initialize();
+
+// Endpoint to send a WhatsApp reminder
 app.post('/sendReminder', async (req, res) => {
   const { phone, message } = req.body;
   
